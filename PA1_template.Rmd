@@ -1,25 +1,149 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: 'Peer-graded Assignment: Course Project 1'
+author: "Marlon Martinez"
+date: "October 29, 2017"
+output: html_document
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
-## Loading and preprocessing the data
+### Loading and preprocessing the data
 
+Creating a data frame with the activity.csv
 
+```{r load}
+activityDF<-read.table("activity.csv",sep = ",",header = TRUE)
+head(activityDF)
+```
 
-## What is mean total number of steps taken per day?
+### What is mean total number of steps taken per day?
 
+First, it's necessary to sum all steps for each day (missing values are ingnored)
 
+```{r}
+totalByDay<-tapply(activityDF$steps,activityDF$date,FUN = sum,na.rm=TRUE)
+head(totalByDay)
+```
 
-## What is the average daily activity pattern?
+Histogram of the total number steps per day:
 
+```{r}
+hist(totalByDay,main = "Histogram of Total of Steps per Day",xlab="Steps")
+  abline(v=mean(totalByDay),col="blue",lty=2)
+  abline(v=median(totalByDay),col="red",lty=2)
+  legend("topright",legend=c(paste("Mean:",round(mean(totalByDay))),paste("Median:",median(totalByDay))),col = c("blue","red"),lty = 2,lwd=2)
 
+```
 
-## Imputing missing values
+The mean of total steps per day is : 
+```{r echo=FALSE}
+mean(totalByDay)
+```
+and the median is: 
+```{r echo=FALSE}
+median(totalByDay)
+```
 
+###What is the average daily activity pattern?
 
+Average of steps for each interval:
+```{r}
+avgByInterval<-tapply(activityDF$steps,activityDF$interval,FUN = mean,na.rm=TRUE)
+head(avgByInterval)
+```
 
-## Are there differences in activity patterns between weekdays and weekends?
+Plotting results:
+
+```{r}
+plot(avgByInterval,type="l",xlab = "Interval position",ylab = "Average")
+abline(v=which.max(avgByInterval),col="blue",lty=2)
+legend("topright",legend=paste("Interval with max average: ",names(which.max(avgByInterval))),col ="blue",lty = 2,lwd=2)
+```
+
+Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+```{r}
+avgByInterval[which.max(avgByInterval)]
+```
+
+### Imputing missing values
+
+The presence of missing days may introduce bias into some calculations or summaries of the data.
+Total number of missing values in the dataset:
+
+```{r}
+sum(is.na(activityDF$steps))
+```
+
+The mean for the 5-minute interval calculated before was used to fill the missing data in the dataset.
+```{r}
+avgDF<-data.frame(interval=as.factor(names(avgByInterval)),avg=avgByInterval)
+newActivityDF<-merge(activityDF,avgDF,by="interval")
+head(newActivityDF)
+```
+
+For all the missing values of the dataset of steps they will use the mean(avg) value of each interval. 
+```{r}
+newActivityDF$steps[is.na(newActivityDF$steps)]<-round(newActivityDF$avg[is.na(newActivityDF$steps)])
+```
+
+Sum all steps for each day (including missing values with the average of each interval)
+```{r}
+newTotalByDay<-tapply(newActivityDF$steps,newActivityDF$date,FUN = sum,na.rm=TRUE)
+head(newTotalByDay)
+```
+
+Histogram of the total number steps per day:
+
+```{r}
+hist(newTotalByDay,main = "Histogram of Total of Steps per Day",xlab="Steps")
+  abline(v=mean(newTotalByDay),col="blue",lty=2)
+  abline(v=median(newTotalByDay),col="red",lty=2)
+  legend("topright",legend=c(paste("Mean:",round(mean(newTotalByDay))),paste("Median:",median(newTotalByDay))),col = c("blue","red"),lty = 2,lwd=2)
+
+```
+
+**What is the impact of imputing missing data on the estimates of the total daily number of steps?** Now the mean and median are higher than before.
+```{r}
+mean(totalByDay)
+mean(newTotalByDay)
+```
+
+##Are there differences in activity patterns between weekdays and weekends?
+
+Creating two level factor variable called weekday using the dataset with missing values fixed
+
+```{r}
+newActivityDF$date<-as.POSIXct(strptime(newActivityDF$date, "%Y-%m-%d"))
+newActivityDF$weekday<-"weekday"
+newActivityDF$weekday[weekdays(newActivityDF$date,abbreviate = TRUE)==c("Sat","Sun")]<-"weekend"
+newActivityDF$weekday<-as.factor(newActivityDF$weekday)
+head(newActivityDF)
+```
+
+Creating 2 dataset with the mean of steps by interval, one for weekdays and the other for weekend
+
+```{r}
+subWeekDF<-aggregate(steps~interval,subset(newActivityDF,newActivityDF$weekday=="weekday"),FUN = mean) 
+subWeekendDF<-aggregate(steps~interval,subset(newActivityDF,newActivityDF$weekday=="weekend"),FUN = mean)
+
+subWeekDF$weekday<-"weekday"
+subWeekendDF$weekday<-"weekend"
+```
+
+Merging the datasets with the average
+
+```{r}
+weekDayDF<-rbind(subWeekDF,subWeekendDF)
+head(weekDayDF)
+```
+
+Plotting the mean of intervals separated by weekday
+
+```{r}
+library(ggplot2)
+gp<-ggplot(data = weekDayDF,aes(interval,steps))
+gp+geom_line()+facet_grid(.~weekday)+ylim(0,250)+ggtitle("Average number of steps by interval")
+```
+
